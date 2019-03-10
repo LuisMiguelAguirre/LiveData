@@ -1,6 +1,5 @@
 package com.luisaguirre.acviewmodel.networking;
 
-import retrofit2.Converter;
 import retrofit2.Retrofit;
 import retrofit2.converter.moshi.MoshiConverterFactory;
 
