@@ -10,17 +10,19 @@ import com.luisaguirre.acviewmodel.networking.RepoApi;
 
 import java.util.List;
 
-import retrofit2.Call;
-import retrofit2.Callback;
-import retrofit2.Response;
+import io.reactivex.Single;
+import io.reactivex.SingleObserver;
+import io.reactivex.android.schedulers.AndroidSchedulers;
+import io.reactivex.disposables.Disposable;
+import io.reactivex.schedulers.Schedulers;
 
 public class ListViewModel extends ViewModel {
 
     private final MutableLiveData<List<Repo>> repos = new MutableLiveData<>();
     private final MutableLiveData<Boolean> repoLoadError = new MutableLiveData<>();
     private final MutableLiveData<Boolean> loading = new MutableLiveData<>();
-    private Call<List<Repo>> repoCall;
-
+    private Single<List<Repo>> repoCall;
+    private Disposable dispose;
 
     public LiveData<List<Repo>> getRepos() {
         return repos;
@@ -39,34 +41,40 @@ public class ListViewModel extends ViewModel {
     }
 
 
-
     private void fetchRepos() {
         loading.setValue(true);
         repoCall = RepoApi.getInstance().getRepositories();
 
-        repoCall.enqueue(new Callback<List<Repo>>() {
-            @Override
-            public void onResponse(Call<List<Repo>> call, Response<List<Repo>> response) {
-                loading.setValue(false);
-                repoLoadError.setValue(false);
-                repos.setValue(response.body());
-                repoCall = null;
-            }
+        repoCall.subscribeOn(Schedulers.io())
+                .observeOn(AndroidSchedulers.mainThread())
+                .subscribe(new SingleObserver<List<Repo>>() {
+                    @Override
+                    public void onSubscribe(Disposable d) {
+                        dispose = d;
+                    }
 
-            @Override
-            public void onFailure(Call<List<Repo>> call, Throwable t) {
-                Log.e(getClass().getSimpleName(), "Error loading repos: ");
-                loading.setValue(false);
-                repoLoadError.setValue(true);
-                repoCall = null;
-            }
-        });
+                    @Override
+                    public void onSuccess(List<Repo> repositories) {
+                        loading.setValue(false);
+                        repoLoadError.setValue(false);
+                        repos.setValue(repositories);
+                        repoCall = null;
+                    }
+
+                    @Override
+                    public void onError(Throwable e) {
+                        Log.e(getClass().getSimpleName(), "Error loading repos: ");
+                        loading.setValue(false);
+                        repoLoadError.setValue(true);
+                        repoCall = null;
+                    }
+                });
     }
 
     @Override
     protected void onCleared() {
         if (repoCall != null) {
-            repoCall.cancel();
+            dispose.dispose();
             repoCall = null;
         }
     }
